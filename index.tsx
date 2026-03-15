@@ -468,7 +468,8 @@ function spawnHonoredIframe(url: string) {
     const embedUrl = url.replace(/^https?:\/\/(?:www\.)?youtube\.com/, "https://www.youtube-nocookie.com");
     const videoId = embedUrl.split("/").pop()?.split("?")[0] ?? "";
     const sep = embedUrl.includes("?") ? "&" : "?";
-    iframe.src = `${embedUrl}${sep}autoplay=1&loop=1&playlist=${videoId}`;
+    // typingparty=1 lets the native.ts main-process hook identify this iframe
+    iframe.src = `${embedUrl}${sep}autoplay=1&loop=1&playlist=${videoId}&typingparty=1`;
     document.body.appendChild(iframe);
     honoredOneIframe = iframe;
 }
