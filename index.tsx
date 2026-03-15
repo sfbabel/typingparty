@@ -156,9 +156,10 @@ let summaryTriggered = false;
 let lastShakeTime = 0;
 
 let honoredOneActive       = false;
-let honoredOneAudioTimer:  ReturnType<typeof setTimeout> | null = null; // 5s delay before audio starts
+let honoredOneAudioTimer:  ReturnType<typeof setTimeout> | null = null; // 1s delay before audio starts
 let honoredOnePurpleTimer: ReturnType<typeof setTimeout> | null = null; // Murasaki flash at 1:16
 let honoredOneCrashTimer:  ReturnType<typeof setTimeout> | null = null; // crash screen at 1:50
+let honoredOneStagelightTimer: ReturnType<typeof setTimeout> | null = null; // stagelight after banner fades
 let honoredOneIframe: HTMLIFrameElement | null = null;
 let honoredOneAudio:  HTMLAudioElement  | null = null;
 
@@ -441,6 +442,7 @@ function destroyHud() {
 
 function spawnConfetti(x: number, y: number) {
     if (!settings.store.enableConfetti || !particleContainer) return;
+    if (honoredOneActive) return; // sleek — no confetti during Honored One
     const tier = getRankIndex(styleScore);
     if (tier < 1) return;
     const count = Math.min(settings.store.confettiDensity + Math.floor(tier / 2), 6);
@@ -607,6 +609,17 @@ function activateHonoredOne() {
     honoredOnePurpleTimer = setTimeout(triggerMurasakiFlash, 76_000);  // 1s audio delay + 1:15 into track
     honoredOneCrashTimer  = setTimeout(triggerFakeCrash,    111_000); // 1s audio delay + 1:50 into track
 
+    // Stagelight — fades in after banner disappears (3s), shines down on the typing area
+    honoredOneStagelightTimer = setTimeout(() => {
+        honoredOneStagelightTimer = null;
+        if (!honoredOneActive) return;
+        const el = document.createElement("div");
+        el.id = "tp-stagelight";
+        document.body.appendChild(el);
+        // Smooth fade-in
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 800, fill: "forwards", easing: "ease-in" });
+    }, 3000);
+
     // 1-second delay — banner shows, then music drops right after
     honoredOneAudioTimer = setTimeout(() => {
         honoredOneAudioTimer = null;
@@ -631,11 +644,18 @@ function activateHonoredOne() {
 function deactivateHonoredOne() {
     if (!honoredOneActive) return;
     honoredOneActive = false;
-    if (honoredOneAudioTimer)  { clearTimeout(honoredOneAudioTimer);  honoredOneAudioTimer  = null; }
-    if (honoredOnePurpleTimer) { clearTimeout(honoredOnePurpleTimer); honoredOnePurpleTimer = null; }
-    if (honoredOneCrashTimer)  { clearTimeout(honoredOneCrashTimer);  honoredOneCrashTimer  = null; }
+    if (honoredOneAudioTimer)       { clearTimeout(honoredOneAudioTimer);       honoredOneAudioTimer       = null; }
+    if (honoredOnePurpleTimer)      { clearTimeout(honoredOnePurpleTimer);      honoredOnePurpleTimer      = null; }
+    if (honoredOneCrashTimer)       { clearTimeout(honoredOneCrashTimer);       honoredOneCrashTimer       = null; }
+    if (honoredOneStagelightTimer)  { clearTimeout(honoredOneStagelightTimer);  honoredOneStagelightTimer  = null; }
     document.getElementById("tp-murasaki")?.remove();
     document.getElementById("tp-crash")?.remove();
+    // Fade out stagelight gracefully
+    const stagelight = document.getElementById("tp-stagelight");
+    if (stagelight) {
+        stagelight.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" })
+            .onfinish = () => stagelight.remove();
+    }
     if (honoredOneAudio) {
         honoredOneAudio.pause();
         honoredOneAudio.src = "";
@@ -651,6 +671,7 @@ function deactivateHonoredOne() {
 
 function triggerShake() {
     if (!settings.store.enableScreenShake) return;
+    if (honoredOneActive) return; // sleek — no shake during Honored One
     const rankIdx = getRankIndex(styleScore);
     if (rankIdx < 2) return;
 
@@ -816,7 +837,7 @@ export default definePlugin({
         particles.length = 0;
 
         deactivateHonoredOne();
-        honoredOneActive = false; honoredOneAudioTimer = null; honoredOnePurpleTimer = null; honoredOneCrashTimer = null; honoredOneAudio = null; honoredOneIframe = null;
+        honoredOneActive = false; honoredOneAudioTimer = null; honoredOnePurpleTimer = null; honoredOneCrashTimer = null; honoredOneStagelightTimer = null; honoredOneAudio = null; honoredOneIframe = null;
 
         const chat = getChatEl();
         if (chat) { chat.getAnimations().forEach(a => a.cancel()); chat.style.transform = ""; }
@@ -825,6 +846,7 @@ export default definePlugin({
 
         document.getElementById("tp-summary")?.remove();
         document.getElementById("tp-honored-banner")?.remove();
+        document.getElementById("tp-stagelight")?.remove();
         document.querySelectorAll(".tp-popup").forEach(el => el.remove());
         destroyHud();
         document.getElementById("tp-styles")?.remove();
@@ -1027,6 +1049,32 @@ const CSS_TEXT = `
     white-space: pre;
     font-size: 15px; font-weight: 400; color: rgba(255,255,255,0.7);
     text-align: center; line-height: 2; letter-spacing: 1px;
+}
+
+/* ── Stagelight (Honored One) ─────────────────────────────────────────────── */
+#tp-stagelight {
+    position: fixed; inset: 0; z-index: 9997; pointer-events: none;
+    background:
+        radial-gradient(ellipse 28% 100% at 50% 0%,
+            rgba(200,150,255,0.12) 0%,
+            rgba(155,89,182,0.06) 35%,
+            transparent 70%),
+        linear-gradient(180deg,
+            rgba(200,150,255,0.05) 0%,
+            transparent 55%);
+    opacity: 0;
+}
+#tp-stagelight::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 3px; height: 0;
+    background: linear-gradient(180deg, rgba(232,213,255,0.5), transparent);
+    animation: tp-stagelight-beam 1.2s ease-out 0.2s forwards;
+}
+@keyframes tp-stagelight-beam {
+    0%   { height: 0; opacity: 0; }
+    100% { height: 100vh; opacity: 1; }
 }
 
 #tp-particles {
