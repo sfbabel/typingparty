@@ -22,9 +22,9 @@ const settings = definePluginSettings({
     },
     shakeIntensity: {
         type: OptionType.SLIDER,
-        description: "Shake intensity multiplier",
+        description: "Screen shake cap — lower = less shaking (1 = subtle, 4 = full)",
         markers: [1, 2, 3, 4, 5, 6, 7, 8],
-        default: 4,
+        default: 2,
         stickToMarkers: true,
     },
     confettiDensity: {
@@ -40,6 +40,11 @@ const settings = definePluginSettings({
         markers: [1, 2, 3, 4, 5, 6, 7, 8],
         default: 3,
         stickToMarkers: true,
+    },
+    honoredOneAudioUrl: {
+        type: OptionType.STRING,
+        description: "YouTube embed URL for the secret Honored One rank theme",
+        default: "https://www.youtube.com/embed/zv2nHpEgqVU",
     },
 });
 
@@ -126,6 +131,10 @@ let summaryTriggered = false;
 
 // Shake throttle
 let lastShakeTime = 0;
+
+// Honored One (secret rank at 300 WPM)
+let honoredOneActive    = false;
+let honoredOneIframe: HTMLIFrameElement | null = null;
 
 // ── Utility ───────────────────────────────────────────────────────────────────
 
@@ -397,6 +406,19 @@ function updateHud() {
 
     if (rankEl) { rankEl.textContent = rank.label; rankEl.style.color = rank.color; }
 
+    // ── Honored One override ───────────────────────────────────────────────────
+    const isHonoredOne = wpm >= 300;
+    if (isHonoredOne && !honoredOneActive) activateHonoredOne();
+    else if (!isHonoredOne && honoredOneActive) deactivateHonoredOne();
+    if (isHonoredOne) {
+        hud.dataset.rank = "honored";
+        if (rankEl) {
+            rankEl.textContent = "✦";
+            rankEl.style.color = "#e8d5ff";
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Meter = within-rank buffer — how much room before dropping a rank
     if (fillEl) {
         const lo  = rank.min;
@@ -462,6 +484,36 @@ function spawnConfetti(x: number, y: number) {
         };
         requestAnimationFrame(frame);
     }
+}
+
+// ── Honored One ───────────────────────────────────────────────────────────────
+
+function activateHonoredOne() {
+    if (honoredOneActive) return;
+    honoredOneActive = true;
+    screenFlash("#9b59b430");
+    showPopup("✦ HONORED ONE ✦", "#e8d5ff", true);
+
+    const url = settings.store.honoredOneAudioUrl?.trim();
+    if (url) {
+        const iframe = document.createElement("iframe");
+        iframe.id = "tp-honored-audio";
+        iframe.allow = "autoplay; encrypted-media";
+        iframe.style.cssText = "display:none;position:fixed;width:1px;height:1px;pointer-events:none;top:-99px;";
+        // Append autoplay + loop query params
+        const sep = url.includes("?") ? "&" : "?";
+        const videoId = url.split("/").pop()?.split("?")[0] ?? "";
+        iframe.src = `${url}${sep}autoplay=1&loop=1&playlist=${videoId}`;
+        document.body.appendChild(iframe);
+        honoredOneIframe = iframe;
+    }
+}
+
+function deactivateHonoredOne() {
+    if (!honoredOneActive) return;
+    honoredOneActive = false;
+    honoredOneIframe?.remove();
+    honoredOneIframe = null;
 }
 
 // ── Screen shake — Web Animations API, throttled ──────────────────────────────
@@ -551,8 +603,20 @@ function onKeyDown(e: KeyboardEvent) {
     incrementCombo();
     gainStyle();
 
-    const rect = target.getBoundingClientRect();
-    spawnConfetti(rect.left + rect.width * (0.3 + Math.random() * 0.4), rect.top);
+    // Spawn confetti at the actual cursor position inside the textbox
+    const sel = window.getSelection();
+    let cx: number, cy: number;
+    if (sel && sel.rangeCount > 0) {
+        const cr = sel.getRangeAt(0).getBoundingClientRect();
+        // getBoundingClientRect() on a collapsed range returns the caret position
+        cx = cr.right;
+        cy = cr.top + cr.height * 0.5;
+    } else {
+        const fallback = target.getBoundingClientRect();
+        cx = fallback.left + fallback.width * (0.3 + Math.random() * 0.4);
+        cy = fallback.top;
+    }
+    spawnConfetti(cx, cy);
     triggerShake();
     updateHud();
 
@@ -606,6 +670,9 @@ export default definePlugin({
         if (comboTimer)    clearTimeout(comboTimer);
         if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
         if (summaryTimeout){ clearTimeout(summaryTimeout); summaryTimeout = null; }
+
+        deactivateHonoredOne();
+        honoredOneActive = false;
 
         const chat = document.querySelector("[class*='chatContent']") as HTMLElement | null;
         if (chat) { chat.getAnimations().forEach(a => a.cancel()); chat.style.transform = ""; }
@@ -797,6 +864,28 @@ const CSS_TEXT = `
     0%   { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(8px); }
 }
+
+/* ── Honored One (secret rank: 300 WPM) ────────────────────────────────────── */
+#tp-hud[data-rank="honored"] {
+    transform: scale(2.0);
+    background: rgba(30, 8, 55, 0.92);
+    border-color: rgba(200, 150, 255, 0.22);
+    box-shadow:
+        0 0 0 1px rgba(200,150,255,0.15),
+        0 0 48px rgba(155,89,182,0.45),
+        0 4px 28px rgba(0,0,0,0.7);
+    backdrop-filter: blur(16px);
+}
+#tp-hud[data-rank="honored"] #tp-rank-letter {
+    font-size: 44px;
+    letter-spacing: 0;
+    animation: tp-honored-pulse 0.75s ease-in-out infinite alternate;
+}
+@keyframes tp-honored-pulse {
+    from { filter: brightness(1.0) hue-rotate(0deg);  text-shadow: 0 0 18px #e8d5ff, 0 0 36px #9b59b6; }
+    to   { filter: brightness(2.2) hue-rotate(28deg); text-shadow: 0 0 32px #fff,    0 0 64px #c77dff, 0 0 96px #7b2d8b; }
+}
+#tp-hud[data-rank="honored"] #tp-meter-fill { background: #c77dff !important; box-shadow: 0 0 12px #c77dff !important; }
 
 #tp-particles {
     position: fixed; top: 0; left: 0;
