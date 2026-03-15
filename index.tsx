@@ -156,10 +156,11 @@ let summaryTriggered = false;
 let lastShakeTime = 0;
 
 let honoredOneActive       = false;
-let honoredOneAudioTimer:  ReturnType<typeof setTimeout> | null = null; // 1s delay before audio starts
-let honoredOnePurpleTimer: ReturnType<typeof setTimeout> | null = null; // Murasaki flash at 1:16
-let honoredOneCrashTimer:  ReturnType<typeof setTimeout> | null = null; // crash screen at 1:50
-let honoredOneStagelightTimer: ReturnType<typeof setTimeout> | null = null; // stagelight after banner fades
+let honoredOneAudioTimer:  ReturnType<typeof setTimeout> | null = null;
+let honoredOnePurpleTimer: ReturnType<typeof setTimeout> | null = null;
+let honoredOneCrashTimer:  ReturnType<typeof setTimeout> | null = null;
+let honoredOneStagelightTimer: ReturnType<typeof setTimeout> | null = null;
+let honoredOneRedBlueTimer: ReturnType<typeof setTimeout> | null = null;
 let honoredOneIframe: HTMLIFrameElement | null = null;
 let honoredOneAudio:  HTMLAudioElement  | null = null;
 
@@ -509,23 +510,45 @@ function showSendEffect(sendCombo: number, rankIdx: number) {
 
 // ── Honored One moments ───────────────────────────────────────────────────────
 
-// 1:16 — Gojo says "Murasaki" (紫, purple void). Full-screen purple wipe.
+// ~1:06 — Red (赫) and Blue (蒼) orbs appear on opposite sides and converge toward center
+function triggerRedBlue() {
+    // Remove stagelight — the scene is changing
+    const sl = document.getElementById("tp-stagelight");
+    if (sl) sl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 2000, fill: "forwards" }).onfinish = () => sl.remove();
+
+    const red = document.createElement("div");
+    red.id = "tp-orb-red";
+    const blue = document.createElement("div");
+    blue.id = "tp-orb-blue";
+    document.body.appendChild(red);
+    document.body.appendChild(blue);
+    // They converge over ~9 seconds (1:06 → 1:15)
+}
+
+// 1:15.9 — "MURASAKI" (紫). Flash + persistent full-screen purple.
+// Red and Blue merge → Hollow Purple covers everything.
 function triggerMurasakiFlash() {
+    // Remove converging orbs
+    document.getElementById("tp-orb-red")?.remove();
+    document.getElementById("tp-orb-blue")?.remove();
+
     const el = document.createElement("div");
     el.id = "tp-murasaki";
     document.body.appendChild(el);
 
+    // Hard flash on impact, then settle into a persistent purple haze
     el.animate(
         [
             { opacity: 0 },
-            { opacity: 1, offset: 0.04 },
-            { opacity: 0.85, offset: 0.15 },
-            { opacity: 1, offset: 0.3 },
-            { opacity: 0.6, offset: 0.55 },
-            { opacity: 0 },
+            { opacity: 1, offset: 0.03 },
+            { opacity: 0.7, offset: 0.12 },
+            { opacity: 1, offset: 0.2 },
+            { opacity: 0.55, offset: 0.5 },
+            { opacity: 0.4 },
         ],
-        { duration: 3200, easing: "ease-in-out", fill: "forwards" }
-    ).onfinish = () => el.remove();
+        { duration: 4000, easing: "ease-in-out", fill: "forwards" }
+    );
+    // Purple persists — removed only on deactivate or crash
 }
 
 // 1:50 — Climax. Discord "crashes". Stays for 6 seconds then fades.
@@ -602,12 +625,13 @@ function activateHonoredOne() {
     const isDirectFile = /\.(mp3|ogg|wav|flac|aac|m4a|opus)(\?|$)/i.test(url);
     const embedUrl     = isDirectFile ? null : buildEmbedUrl(url);
 
-    // Dramatic moments keyed to the track (offsets relative to activation):
-    //   +1s   = audio starts
-    //   +77s  = 1:16 Murasaki flash (1s delay + 76s into track)
-    //   +111s = 1:50 crash sequence (1s delay + 110s into track)
-    honoredOnePurpleTimer = setTimeout(triggerMurasakiFlash, 76_000);  // 1s audio delay + 1:15 into track
-    honoredOneCrashTimer  = setTimeout(triggerFakeCrash,    111_000); // 1s audio delay + 1:50 into track
+    // Dramatic moments keyed to the track (offsets from activation, +1s audio delay):
+    //   +67s  = 1:06 Red & Blue orbs appear and converge
+    //   +77s  = 1:15.9 MURASAKI — flash + persistent purple
+    //   +104s = 1:43 crash (energy dies here, not 1:50)
+    honoredOneRedBlueTimer = setTimeout(triggerRedBlue,      67_000);
+    honoredOnePurpleTimer  = setTimeout(triggerMurasakiFlash, 77_000);
+    honoredOneCrashTimer   = setTimeout(triggerFakeCrash,    104_000);
 
     // Stagelight — fades in after banner disappears (3s), shines down on the typing area
     honoredOneStagelightTimer = setTimeout(() => {
@@ -646,8 +670,11 @@ function deactivateHonoredOne() {
     if (honoredOnePurpleTimer)      { clearTimeout(honoredOnePurpleTimer);      honoredOnePurpleTimer      = null; }
     if (honoredOneCrashTimer)       { clearTimeout(honoredOneCrashTimer);       honoredOneCrashTimer       = null; }
     if (honoredOneStagelightTimer)  { clearTimeout(honoredOneStagelightTimer);  honoredOneStagelightTimer  = null; }
+    if (honoredOneRedBlueTimer)     { clearTimeout(honoredOneRedBlueTimer);     honoredOneRedBlueTimer     = null; }
     document.getElementById("tp-murasaki")?.remove();
     document.getElementById("tp-crash")?.remove();
+    document.getElementById("tp-orb-red")?.remove();
+    document.getElementById("tp-orb-blue")?.remove();
     // Fade out stagelight gracefully
     const stagelight = document.getElementById("tp-stagelight");
     if (stagelight) {
@@ -835,7 +862,7 @@ export default definePlugin({
         particles.length = 0;
 
         deactivateHonoredOne();
-        honoredOneActive = false; honoredOneAudioTimer = null; honoredOnePurpleTimer = null; honoredOneCrashTimer = null; honoredOneStagelightTimer = null; honoredOneAudio = null; honoredOneIframe = null;
+        honoredOneActive = false; honoredOneAudioTimer = null; honoredOnePurpleTimer = null; honoredOneCrashTimer = null; honoredOneStagelightTimer = null; honoredOneRedBlueTimer = null; honoredOneAudio = null; honoredOneIframe = null;
 
         const chat = getChatEl();
         if (chat) { chat.getAnimations().forEach(a => a.cancel()); chat.style.transform = ""; }
@@ -1024,14 +1051,40 @@ const CSS_TEXT = `
     to   { filter: brightness(1.9); text-shadow: 0 0 28px #fff,    0 0 56px #c77dff; }
 }
 
-/* ── Murasaki (1:16) ─────────────────────────────────────────────────────────── */
+/* ── Red & Blue orbs (1:06) — converge toward center ─────────────────────── */
+#tp-orb-red, #tp-orb-blue {
+    position: fixed; top: 50%; width: 120px; height: 120px;
+    border-radius: 50%; pointer-events: none; z-index: 999997;
+    filter: blur(30px);
+    animation: tp-orb-converge 9s ease-in forwards;
+}
+#tp-orb-red {
+    left: 5%; transform: translateY(-50%);
+    background: radial-gradient(circle, #ff4444 0%, #cc0000 50%, transparent 100%);
+    box-shadow: 0 0 60px #ff4444, 0 0 120px #cc000080;
+    --tp-target-x: calc(50vw - 60px - 5vw);
+}
+#tp-orb-blue {
+    right: 5%; left: auto; transform: translateY(-50%);
+    background: radial-gradient(circle, #4488ff 0%, #0044cc 50%, transparent 100%);
+    box-shadow: 0 0 60px #4488ff, 0 0 120px #0044cc80;
+    --tp-target-x: calc(-50vw + 60px + 5vw);
+}
+@keyframes tp-orb-converge {
+    0%   { opacity: 0; translate: 0 0; scale: 0.5; }
+    15%  { opacity: 1; scale: 1; }
+    85%  { opacity: 1; scale: 1.3; }
+    100% { opacity: 1; translate: var(--tp-target-x) 0; scale: 0.6; filter: blur(50px) brightness(2); }
+}
+
+/* ── Murasaki (1:15.9) — persistent full-screen purple ───────────────────── */
 #tp-murasaki {
     position: fixed; inset: 0; z-index: 999998; pointer-events: none;
-    background: radial-gradient(ellipse at center, #9b30ff 0%, #4a007a 50%, #1a0033 100%);
+    background: radial-gradient(ellipse at center, #b44dff 0%, #7b1fa2 35%, #4a007a 60%, #1a0033 100%);
     opacity: 0;
 }
 
-/* ── Crash screen (1:50) ─────────────────────────────────────────────────────── */
+/* ── Crash screen (1:43) ─────────────────────────────────────────────────────── */
 #tp-crash {
     position: fixed; inset: 0; z-index: 999999; pointer-events: none;
     background: #0d0d0d;
