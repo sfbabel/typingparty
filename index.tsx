@@ -211,6 +211,20 @@ function hurtStyle(amount: number) {
 function startDrainLoop() {
     if (drainInterval) return;
     drainInterval = setInterval(() => {
+        // ── WPM decay: recalculate every tick so wpm reflects current reality,
+        //    not just the last keypress. Without this, wpm stays stale for seconds.
+        const now = Date.now();
+        wpmTimestamps = wpmTimestamps.filter(t => t >= now - 5000);
+        const wpmN = wpmTimestamps.length;
+        if (wpmN >= 2) {
+            const elapsed = (now - wpmTimestamps[0]) / 60000;
+            wpm = elapsed < 0.005 ? 0 : Math.round((wpmN / 5) / elapsed);
+        } else {
+            wpm = 0;
+        }
+        // Honored One deactivation can happen even when styleScore = 0
+        if (honoredOneActive && wpm < 300) deactivateHonoredOne();
+
         if (styleScore <= 0) {
             if (!summaryTriggered && !summaryTimeout && (peakRankIdx > 1 || highCombo > 5)) {
                 summaryTimeout = setTimeout(() => { summaryTimeout = null; showSummary(); }, 3000);
@@ -218,7 +232,7 @@ function startDrainLoop() {
             return;
         }
         const ri   = getRankIndex(styleScore);
-        const idle = Date.now() - lastRhythmTime > 2000;
+        const idle = now - lastRhythmTime > 2000;
         styleScore = Math.max(0, styleScore - (idle ? IDLE_DRAIN[ri] : ACTIVE_DRAIN[ri]));
         updateHud();
     }, 100);
@@ -298,7 +312,9 @@ function updateBarGlow(rankIdx: number) {
     const bar = document.querySelector("[class*='channelTextArea']") as HTMLElement | null;
     if (!bar) return;
     bar.style.transition = "box-shadow 0.4s ease";
-    if (rankIdx === 6)
+    if (honoredOneActive)
+        bar.style.boxShadow = "0 0 0 1.5px rgba(199,125,255,0.55),0 0 36px rgba(155,89,182,0.28)";
+    else if (rankIdx === 6)
         bar.style.boxShadow = "0 0 0 1.5px rgba(255,107,107,0.4),0 0 28px rgba(255,107,107,0.18)";
     else if (rankIdx === 5)
         bar.style.boxShadow = "0 0 0 1px rgba(255,146,43,0.3),0 0 18px rgba(255,146,43,0.13)";
@@ -394,7 +410,7 @@ function updateHud() {
     updateBarGlow(rankIdx);
 
     hud.dataset.rank = rank.id;
-    hud.classList.toggle("tp-visible", styleScore > 0);
+    hud.classList.toggle("tp-visible", styleScore > 0 || honoredOneActive);
 
     const rankEl  = document.getElementById("tp-rank-letter");
     const fillEl  = document.getElementById("tp-meter-fill");
@@ -491,18 +507,28 @@ function spawnConfetti(x: number, y: number) {
 function activateHonoredOne() {
     if (honoredOneActive) return;
     honoredOneActive = true;
-    screenFlash("#9b59b430");
-    showPopup("✦ HONORED ONE ✦", "#e8d5ff", true);
 
+    // Full-screen centered banner — impossible to miss
+    const banner = document.createElement("div");
+    banner.id = "tp-honored-banner";
+    banner.innerHTML = `<span class="tp-honored-title">✦ HONORED ONE ✦</span><span class="tp-honored-sub">300 WPM</span>`;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 3000);
+
+    // Triple flash cascade
+    screenFlash("#9b59b428");
+    setTimeout(() => screenFlash("#c77dff14"), 280);
+    setTimeout(() => screenFlash("#9b59b41a"), 560);
+
+    // Audio via YouTube iframe — autoplay works in Electron/Vesktop
     const url = settings.store.honoredOneAudioUrl?.trim();
     if (url) {
         const iframe = document.createElement("iframe");
         iframe.id = "tp-honored-audio";
         iframe.allow = "autoplay; encrypted-media";
         iframe.style.cssText = "display:none;position:fixed;width:1px;height:1px;pointer-events:none;top:-99px;";
-        // Append autoplay + loop query params
-        const sep = url.includes("?") ? "&" : "?";
         const videoId = url.split("/").pop()?.split("?")[0] ?? "";
+        const sep = url.includes("?") ? "&" : "?";
         iframe.src = `${url}${sep}autoplay=1&loop=1&playlist=${videoId}`;
         document.body.appendChild(iframe);
         honoredOneIframe = iframe;
@@ -514,6 +540,10 @@ function deactivateHonoredOne() {
     honoredOneActive = false;
     honoredOneIframe?.remove();
     honoredOneIframe = null;
+    document.getElementById("tp-honored-banner")?.remove();
+    // Reset bar glow immediately
+    const bar = document.querySelector("[class*='channelTextArea']") as HTMLElement | null;
+    if (bar) bar.style.boxShadow = "";
 }
 
 // ── Screen shake — Web Animations API, throttled ──────────────────────────────
@@ -603,29 +633,39 @@ function onKeyDown(e: KeyboardEvent) {
     incrementCombo();
     gainStyle();
 
-    // Spawn confetti at the actual cursor position inside the textbox
+    // Spawn confetti at the caret position. Collapsed-range rects can be
+    // (0,0,0,0) in some Discord builds — fall back to textbox bounds if so.
     const sel = window.getSelection();
     let cx: number, cy: number;
     if (sel && sel.rangeCount > 0) {
         const cr = sel.getRangeAt(0).getBoundingClientRect();
-        // getBoundingClientRect() on a collapsed range returns the caret position
-        cx = cr.right;
-        cy = cr.top + cr.height * 0.5;
+        if (cr.left !== 0 || cr.top !== 0) {
+            cx = cr.right;
+            cy = cr.top + cr.height * 0.5;
+        } else {
+            const fb = target.getBoundingClientRect();
+            cx = fb.left + fb.width * (0.3 + Math.random() * 0.4);
+            cy = fb.top;
+        }
     } else {
-        const fallback = target.getBoundingClientRect();
-        cx = fallback.left + fallback.width * (0.3 + Math.random() * 0.4);
-        cy = fallback.top;
+        const fb = target.getBoundingClientRect();
+        cx = fb.left + fb.width * (0.3 + Math.random() * 0.4);
+        cy = fb.top;
     }
     spawnConfetti(cx, cy);
     triggerShake();
     updateHud();
 
+    // Brightness flash — skip during Honored One so CSS animation isn't clobbered
     const rankEl = document.getElementById("tp-rank-letter");
-    if (rankEl) {
+    if (rankEl && !honoredOneActive) {
         rankEl.style.transition = "none";
         rankEl.style.filter     = "brightness(2.2)";
         requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (rankEl) { rankEl.style.transition = "filter 0.18s ease-out"; rankEl.style.filter = "brightness(1)"; }
+            if (rankEl && !honoredOneActive) {
+                rankEl.style.transition = "filter 0.18s ease-out";
+                rankEl.style.filter = "brightness(1)";
+            }
         }));
     }
 }
@@ -680,6 +720,7 @@ export default definePlugin({
         if (bar) bar.style.boxShadow = "";
 
         document.getElementById("tp-summary")?.remove();
+        document.getElementById("tp-honored-banner")?.remove();
         document.querySelectorAll(".tp-popup,.tp-rankup-flash").forEach(el => el.remove());
         destroyHud();
         document.getElementById("tp-styles")?.remove();
@@ -866,6 +907,43 @@ const CSS_TEXT = `
 }
 
 /* ── Honored One (secret rank: 300 WPM) ────────────────────────────────────── */
+
+/* Full-screen reveal banner */
+#tp-honored-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Oswald', sans-serif;
+    pointer-events: none;
+    z-index: 99998;
+    animation: tp-honored-banner-anim 3s ease-out forwards;
+}
+.tp-honored-title {
+    font-size: 72px;
+    font-weight: 700;
+    letter-spacing: 14px;
+    color: #e8d5ff;
+    text-transform: uppercase;
+    text-shadow: 0 0 40px #c77dff, 0 0 80px #9b59b6, 0 0 140px #7b2d8b;
+}
+.tp-honored-sub {
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: 10px;
+    color: rgba(200,180,255,0.55);
+    text-transform: uppercase;
+}
+@keyframes tp-honored-banner-anim {
+    0%   { opacity: 0; transform: translate(-50%, -44%) scale(0.82); }
+    12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+    72%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -58%) scale(0.96); }
+}
 #tp-hud[data-rank="honored"] {
     transform: scale(2.0);
     background: rgba(30, 8, 55, 0.92);
