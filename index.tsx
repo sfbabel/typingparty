@@ -1,6 +1,6 @@
 /*
  * Vencord, a Discord client mod
- * Copyright (c) 2026 Miku
+ * Copyright (c) 2026 sfbabel
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -681,8 +681,8 @@ function onKeyDownCapture(e: KeyboardEvent) {
 
 export default definePlugin({
     name: "TypingParty",
-    description: "DMC-inspired style meter — rewards speed and rhythm with confetti, screenshake, and rank-up drama",
-    authors: [{ name: "Miku", id: 0n }],
+    description: "DMC-inspired style meter — rewards speed and rhythm with confetti, screenshake, and rank-up drama. github.com/sfbabel/typingparty",
+    authors: [{ name: "sfbabel", id: 0n }],
     settings,
 
     start() {
