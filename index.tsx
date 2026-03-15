@@ -43,8 +43,8 @@ const settings = definePluginSettings({
     },
     honoredOneAudioUrl: {
         type: OptionType.STRING,
-        description: "Audio for Honored One rank — paste a direct .mp3/.ogg/.wav URL (plays natively) or a YouTube embed URL (iframe fallback)",
-        default: "",
+        description: "Audio for Honored One rank — direct .mp3/.ogg/.wav URL plays natively; YouTube embed URLs use iframe. Swap out the default to change the track.",
+        default: "https://www.youtube.com/embed/7hkI43oPIxk",
     },
 });
 
