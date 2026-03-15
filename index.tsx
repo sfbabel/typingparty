@@ -24,14 +24,14 @@ const settings = definePluginSettings({
         type: OptionType.SLIDER,
         description: "Screen shake cap — lower = less shaking (1 = subtle, 4 = full)",
         markers: [1, 2, 3, 4, 5, 6, 7, 8],
-        default: 2,
+        default: 1,
         stickToMarkers: true,
     },
     confettiDensity: {
         type: OptionType.SLIDER,
         description: "Confetti particles per keystroke",
         markers: [1, 2, 3, 4, 5],
-        default: 2,
+        default: 1,
         stickToMarkers: true,
     },
     comboTimeoutMs: {
@@ -167,7 +167,7 @@ let honoredOneAudio:  HTMLAudioElement  | null = null;
 function recordKeystrokeForWpm() {
     const now = Date.now();
     wpmTimestamps.push(now);
-    wpmTimestamps = wpmTimestamps.filter(t => t >= now - 5000);
+    wpmTimestamps = wpmTimestamps.filter(t => t >= now - 2000);
     const n = wpmTimestamps.length;
     if (n < 2) { wpm = 0; return; }
     const elapsed = (now - wpmTimestamps[0]) / 60000;
@@ -176,7 +176,7 @@ function recordKeystrokeForWpm() {
 
 function recalcWpm() {
     const now = Date.now();
-    wpmTimestamps = wpmTimestamps.filter(t => t >= now - 5000);
+    wpmTimestamps = wpmTimestamps.filter(t => t >= now - 2000);
     const n = wpmTimestamps.length;
     if (n < 2) { wpm = 0; return; }
     const elapsed = (now - wpmTimestamps[0]) / 60000;
