@@ -43,8 +43,8 @@ const settings = definePluginSettings({
     },
     honoredOneAudioUrl: {
         type: OptionType.STRING,
-        description: "Audio for Honored One rank — direct .mp3/.ogg/.wav URL plays natively; YouTube embed URLs use iframe. Swap to change the track.",
-        default: "",
+        description: "Audio for Honored One rank — SoundCloud/YouTube track URL or direct .mp3/.ogg/.wav link.",
+        default: "https://soundcloud.com/nikita-fomin-609801819/if-i-am-with-you-yoshimasa-terui",
     },
 });
 
@@ -155,8 +155,8 @@ let summaryTriggered = false;
 
 let lastShakeTime = 0;
 
-let honoredOneActive    = false;
-let honoredOneMinUntil  = 0; // don't deactivate before this timestamp
+let honoredOneActive      = false;
+let honoredOneAudioTimer: ReturnType<typeof setTimeout> | null = null; // 5s delay before audio starts
 let honoredOneIframe: HTMLIFrameElement | null = null;
 let honoredOneAudio:  HTMLAudioElement  | null = null;
 
@@ -229,7 +229,7 @@ function startDrainLoop() {
     drainInterval = setInterval(() => {
         // Recalculate WPM so it decays naturally when typing stops
         recalcWpm();
-        if (honoredOneActive && wpm < 300 && Date.now() > honoredOneMinUntil) deactivateHonoredOne();
+        if (honoredOneActive && wpm < 300) deactivateHonoredOne();
 
         if (styleScore <= 0) {
             if (!summaryTriggered && !summaryTimeout && (peakRankIdx > 1 || highCombo > 5)) {
@@ -503,26 +503,39 @@ function showSendEffect(sendCombo: number, rankIdx: number) {
 
 // ── Honored One ───────────────────────────────────────────────────────────────
 
-function spawnHonoredIframe(url: string) {
+// Spawns an iframe for the given final embed URL, tagging it with typingparty=1
+// so the native.ts main-process hook can identify and force-play it.
+function spawnHonoredIframe(embedUrl: string) {
     const iframe = document.createElement("iframe");
     iframe.id = "tp-honored-audio";
     iframe.allow = "autoplay; encrypted-media; fullscreen";
     // opacity:0 keeps it in the visual viewport — Chromium throttles truly off-screen iframes
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;pointer-events:none;opacity:0;";
-    // Prefer youtube-nocookie for better autoplay permission handling
-    const embedUrl = url.replace(/^https?:\/\/(?:www\.)?youtube\.com/, "https://www.youtube-nocookie.com");
-    const videoId = embedUrl.split("/").pop()?.split("?")[0] ?? "";
     const sep = embedUrl.includes("?") ? "&" : "?";
-    // typingparty=1 lets the native.ts main-process hook identify this iframe
-    iframe.src = `${embedUrl}${sep}autoplay=1&loop=1&playlist=${videoId}&typingparty=1`;
+    iframe.src = `${embedUrl}${sep}typingparty=1`;
     document.body.appendChild(iframe);
     honoredOneIframe = iframe;
+}
+
+function buildEmbedUrl(url: string): string | null {
+    const isSoundCloud = /soundcloud\.com/i.test(url);
+    const isYouTube    = /youtube(-nocookie)?\.com|youtu\.be/i.test(url);
+
+    if (isSoundCloud) {
+        return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=true&hide_related=true&show_comments=false`;
+    }
+    if (isYouTube) {
+        const nocookie = url.replace(/^https?:\/\/(?:www\.)?youtube\.com/, "https://www.youtube-nocookie.com");
+        const videoId  = nocookie.split("/").pop()?.split("?")[0] ?? "";
+        const sep      = nocookie.includes("?") ? "&" : "?";
+        return `${nocookie}${sep}autoplay=1&loop=1&playlist=${videoId}`;
+    }
+    return null; // direct file — handled by new Audio()
 }
 
 function activateHonoredOne() {
     if (honoredOneActive) return;
     honoredOneActive = true;
-    honoredOneMinUntil = Date.now() + 20000; // play for at least 20s once triggered
 
     const banner = document.createElement("div");
     banner.id = "tp-honored-banner";
@@ -533,31 +546,34 @@ function activateHonoredOne() {
     const url = settings.store.honoredOneAudioUrl?.trim();
     if (!url) return;
 
-    const isYouTube    = /youtube(-nocookie)?\.com|youtu\.be/i.test(url);
     const isDirectFile = /\.(mp3|ogg|wav|flac|aac|m4a|opus)(\?|$)/i.test(url);
+    const embedUrl     = isDirectFile ? null : buildEmbedUrl(url);
 
-    if (isDirectFile || !isYouTube) {
-        // Native HTML5 Audio — works in Electron without CORS restrictions
-        try {
-            const audio = new Audio(url);
-            audio.loop   = true;
-            audio.volume = 0.7;
-            audio.play().catch(() => {
-                // If browser policy blocks autoplay, fall back to iframe
-                spawnHonoredIframe(url);
-            });
-            honoredOneAudio = audio;
-        } catch {
-            spawnHonoredIframe(url);
+    // 5-second delay so the banner has time to breathe before the music drops
+    honoredOneAudioTimer = setTimeout(() => {
+        honoredOneAudioTimer = null;
+        if (!honoredOneActive) return; // deactivated during the delay
+
+        if (isDirectFile || !embedUrl) {
+            try {
+                const audio = new Audio(url);
+                audio.loop   = true;
+                audio.volume = 0.7;
+                audio.play().catch(() => embedUrl && spawnHonoredIframe(embedUrl));
+                honoredOneAudio = audio;
+            } catch {
+                if (embedUrl) spawnHonoredIframe(embedUrl);
+            }
+        } else {
+            spawnHonoredIframe(embedUrl);
         }
-    } else {
-        spawnHonoredIframe(url);
-    }
+    }, 5000);
 }
 
 function deactivateHonoredOne() {
     if (!honoredOneActive) return;
     honoredOneActive = false;
+    if (honoredOneAudioTimer) { clearTimeout(honoredOneAudioTimer); honoredOneAudioTimer = null; }
     if (honoredOneAudio) {
         honoredOneAudio.pause();
         honoredOneAudio.src = "";
@@ -738,7 +754,7 @@ export default definePlugin({
         particles.length = 0;
 
         deactivateHonoredOne();
-        honoredOneActive = false; honoredOneMinUntil = 0; honoredOneAudio = null; honoredOneIframe = null;
+        honoredOneActive = false; honoredOneAudioTimer = null; honoredOneAudio = null; honoredOneIframe = null;
 
         const chat = getChatEl();
         if (chat) { chat.getAnimations().forEach(a => a.cancel()); chat.style.transform = ""; }

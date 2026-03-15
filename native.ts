@@ -6,9 +6,10 @@
 
 import { app } from "electron";
 
-// Intercept our YouTube iframe frame and force audio playback from the main process,
-// bypassing Chromium's autoplay policy. We identify our iframe via the `typingparty=1`
-// query parameter that the renderer appends to the embed URL.
+// Intercept our audio iframe and force playback from the main process,
+// bypassing Chromium's autoplay policy entirely.
+// We identify our iframe via the `typingparty=1` query param the renderer appends.
+// Supports both <video> (YouTube) and <audio> (SoundCloud widget) elements.
 
 app.on("browser-window-created", (_, win) => {
     win.webContents.on("frame-created", (_, { frame }) => {
@@ -17,18 +18,19 @@ app.on("browser-window-created", (_, win) => {
             try {
                 if (!frame.url.includes("typingparty=1")) return;
 
-                // Poll for the video element — YouTube's player initialises asynchronously
+                // Poll for the media element — both YouTube (<video>) and
+                // SoundCloud (<audio>) are handled. The player initialises async.
                 frame.executeJavaScript(`
                     (function tryPlay(retries) {
-                        const v = document.querySelector("video");
-                        if (v) {
-                            v.volume = 0.7;
-                            v.muted = false;
-                            v.play().catch(function() {});
-                        } else if (retries > 0) {
-                            setTimeout(function() { tryPlay(retries - 1); }, 300);
+                        var media = document.querySelector("audio") || document.querySelector("video");
+                        if (media) {
+                            media.volume = 0.7;
+                            media.muted = false;
+                            media.play().catch(function() {});
+                            return;
                         }
-                    })(15);
+                        if (retries > 0) setTimeout(function() { tryPlay(retries - 1); }, 300);
+                    })(20);
                 `).catch(() => {});
             } catch {}
         });
