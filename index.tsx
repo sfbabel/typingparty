@@ -44,7 +44,7 @@ const settings = definePluginSettings({
     honoredOneAudioUrl: {
         type: OptionType.STRING,
         description: "Audio for Honored One rank — direct .mp3/.ogg/.wav URL plays natively; YouTube embed URLs use iframe. Swap to change the track.",
-        default: "https://www.youtube-nocookie.com/embed/7hkI43oPIxk",
+        default: "",
     },
 });
 
@@ -156,6 +156,7 @@ let summaryTriggered = false;
 let lastShakeTime = 0;
 
 let honoredOneActive    = false;
+let honoredOneMinUntil  = 0; // don't deactivate before this timestamp
 let honoredOneIframe: HTMLIFrameElement | null = null;
 let honoredOneAudio:  HTMLAudioElement  | null = null;
 
@@ -228,7 +229,7 @@ function startDrainLoop() {
     drainInterval = setInterval(() => {
         // Recalculate WPM so it decays naturally when typing stops
         recalcWpm();
-        if (honoredOneActive && wpm < 300) deactivateHonoredOne();
+        if (honoredOneActive && wpm < 300 && Date.now() > honoredOneMinUntil) deactivateHonoredOne();
 
         if (styleScore <= 0) {
             if (!summaryTriggered && !summaryTimeout && (peakRankIdx > 1 || highCombo > 5)) {
@@ -295,9 +296,10 @@ function showSummary() {
     const bar = getBarEl();
     if (!bar) return;
     const rect   = bar.getBoundingClientRect();
-    const modal  = RANKS[getModalRankIdx()];
+    const modalIdx = getModalRankIdx();
+    const modal  = RANKS[modalIdx];
     const peak   = RANKS[peakRankIdx];
-    const showPk = peakRankIdx > getModalRankIdx() && peakRankIdx > 1;
+    const showPk = peakRankIdx > modalIdx && peakRankIdx > 1;
     const el = document.createElement("div");
     el.id = "tp-summary";
     el.style.cssText = `right:${window.innerWidth - rect.right + 8}px;bottom:${window.innerHeight - rect.top + 8}px;`;
@@ -456,6 +458,49 @@ function spawnConfetti(x: number, y: number) {
     if (!particleRaf) particleRaf = requestAnimationFrame(tickParticles);
 }
 
+// ── Send burst ────────────────────────────────────────────────────────────────
+
+// Raw particle spawner — no tier/rank guard, used for the send celebration.
+function spawnBurst(x: number, y: number, count: number) {
+    if (!particleContainer) return;
+    const now = performance.now();
+    for (let i = 0; i < count; i++) {
+        const el    = document.createElement("div");
+        const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+        const size  = 4 + Math.random() * 6;
+        // Fan upward: angle biased toward the top half of the circle
+        const ang   = -Math.PI + Math.random() * Math.PI; // -180° to 0° (upward arc)
+        const vel   = 50 + Math.random() * 90;
+        const dur   = 700 + Math.random() * 600;
+        el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${size}px;height:${size}px;background:${color};pointer-events:none;z-index:99999;border-radius:${Math.random() > 0.4 ? "50%" : "2px"};will-change:transform,opacity;`;
+        particleContainer.appendChild(el);
+        particles.push({ el, dx: Math.cos(ang) * vel, dy: Math.sin(ang) * vel - 20, rot: Math.random() * 360, t0: now, dur });
+    }
+    if (!particleRaf) particleRaf = requestAnimationFrame(tickParticles);
+}
+
+function showSendEffect(sendCombo: number, rankIdx: number) {
+    if (rankIdx < 1) return; // D rank — no celebration
+    const bar = getBarEl();
+    if (!bar) return;
+    const rect = bar.getBoundingClientRect();
+
+    // Burst fans upward from the message bar — denser at higher ranks
+    if (settings.store.enableConfetti) {
+        const count = 6 + rankIdx * 3 + (sendCombo >= 10 ? 6 : 0);
+        const x = rect.left + rect.width * 0.55 + Math.random() * rect.width * 0.3;
+        const y = rect.top + rect.height * 0.4;
+        spawnBurst(x, y, Math.min(count, 24));
+    }
+
+    // Popup label: only when clean and combo is worth noting
+    const rank = RANKS[rankIdx];
+    const label = sendCombo >= 50 ? "flawless" :
+                  sendCombo >= 25 ? `${sendCombo}×` :
+                  sendCombo >= 10 ? "clean" : "";
+    if (label) showPopup(label, rank.color);
+}
+
 // ── Honored One ───────────────────────────────────────────────────────────────
 
 function spawnHonoredIframe(url: string) {
@@ -477,6 +522,7 @@ function spawnHonoredIframe(url: string) {
 function activateHonoredOne() {
     if (honoredOneActive) return;
     honoredOneActive = true;
+    honoredOneMinUntil = Date.now() + 20000; // play for at least 20s once triggered
 
     const banner = document.createElement("div");
     banner.id = "tp-honored-banner";
@@ -593,7 +639,16 @@ function onMessageSent() {
     if (now - lastMessageTime < 5000) messagesSentInWindow++;
     else messagesSentInWindow = 1;
     lastMessageTime = now;
-    if (!usedBackspace && combo > 3) styleScore = Math.min(100, styleScore + 20);
+
+    const wasClean  = !usedBackspace;
+    const sendCombo = combo;
+    const rankIdx   = getRankIndex(styleScore);
+
+    if (wasClean && combo > 3) styleScore = Math.min(100, styleScore + 20);
+
+    // Show send celebration BEFORE resetting state so we can read rank/combo
+    if (wasClean) showSendEffect(sendCombo, rankIdx);
+
     usedBackspace = false;
     wpmTimestamps = []; wpm = 0; combo = 0;
     updateHud();
@@ -683,7 +738,7 @@ export default definePlugin({
         particles.length = 0;
 
         deactivateHonoredOne();
-        honoredOneActive = false; honoredOneAudio = null; honoredOneIframe = null;
+        honoredOneActive = false; honoredOneMinUntil = 0; honoredOneAudio = null; honoredOneIframe = null;
 
         const chat = getChatEl();
         if (chat) { chat.getAnimations().forEach(a => a.cancel()); chat.style.transform = ""; }
