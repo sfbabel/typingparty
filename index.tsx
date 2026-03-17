@@ -91,7 +91,13 @@ function tickParticles(now: number) {
     while (i--) {
         const p = particles[i];
         const prog = (now - p.t0) / p.dur;
-        if (prog >= 1) { p.el.remove(); particles.splice(i, 1); continue; }
+        if (prog >= 1) {
+            p.el.remove();
+            // Swap-and-pop — O(1) instead of splice O(n)
+            particles[i] = particles[particles.length - 1];
+            particles.pop();
+            continue;
+        }
         const ease = 1 - prog * prog;
         p.el.style.transform = `translate(${p.dx * prog}px,${p.dy * prog + 80 * prog * prog}px) rotate(${p.rot + 360 * prog}deg)`;
         p.el.style.opacity   = String(ease);
@@ -247,6 +253,7 @@ function hurtStyle(amount: number) {
     styleScore = Math.max(0, styleScore - amount);
 }
 
+let drainTick = 0;
 function startDrainLoop() {
     if (drainInterval) return;
     drainInterval = setInterval(() => {
@@ -261,22 +268,19 @@ function startDrainLoop() {
         if (!challengeActive && !honoredOneActive && Math.random() < 0.002 && getRankIndex(styleScore) >= 2)
             triggerChallenge();
 
-        if (styleScore <= 0) {
-            if (!summaryTriggered && !summaryTimeout && (peakRankIdx > 1 || highCombo > 5)) {
-                summaryTimeout = setTimeout(() => { summaryTimeout = null; showSummary(); }, 3000);
-            }
-            return;
+        if (styleScore > 0) {
+            const ri   = getRankIndex(styleScore);
+            const idle = Date.now() - lastRhythmTime > 2000;
+            styleScore = Math.max(0, styleScore - (idle ? IDLE_DRAIN[ri] : ACTIVE_DRAIN[ri]));
+            rankSamples.push(ri);
+            if (rankSamples.length > 600) rankSamples.shift();
+        } else if (!summaryTriggered && !summaryTimeout && (peakRankIdx > 1 || highCombo > 5)) {
+            summaryTimeout = setTimeout(() => { summaryTimeout = null; showSummary(); }, 3000);
         }
-        const ri   = getRankIndex(styleScore);
-        const idle = Date.now() - lastRhythmTime > 2000;
-        styleScore = Math.max(0, styleScore - (idle ? IDLE_DRAIN[ri] : ACTIVE_DRAIN[ri]));
 
-        // Track rank distribution for session summary average
-        rankSamples.push(ri);
-        if (rankSamples.length > 600) rankSamples.shift(); // cap at ~60s of history
-
-        // Reposition HUD here (drain loop = ~10/s) instead of on every keypress
-        positionHud();
+        // Reposition HUD every 500ms (not 100ms) — getBoundingClientRect forces layout
+        if (++drainTick % 5 === 0) positionHud();
+        // Single source of truth for HUD updates — 10Hz is smooth enough
         updateHud();
     }, 100);
 }
@@ -414,7 +418,6 @@ function completeChallenge() {
         challengeEl.classList.add("tp-chal-complete");
         setTimeout(() => { challengeEl?.remove(); challengeEl = null; }, 800);
     }
-    updateHud();
 }
 
 function dismissChallenge() {
@@ -430,18 +433,20 @@ function dismissChallenge() {
 
 // ── Bar glow ──────────────────────────────────────────────────────────────────
 
+let lastBarShadow = "";
 function updateBarGlow(rankIdx: number) {
     const bar = getBarEl();
     if (!bar) return;
-    bar.style.transition = "box-shadow 0.5s ease";
-    if (honoredOneActive)
-        bar.style.boxShadow = "0 0 0 1.5px rgba(199,125,255,0.5),0 0 32px rgba(155,89,182,0.22)";
-    else if (rankIdx === 5) // DEVIL
-        bar.style.boxShadow = "0 0 0 1px rgba(255,107,107,0.35),0 0 20px rgba(255,107,107,0.14)";
-    else if (rankIdx === 4) // S
-        bar.style.boxShadow = "0 0 0 1px rgba(255,217,61,0.2),0 0 12px rgba(255,217,61,0.08)";
-    else
-        bar.style.boxShadow = "";
+    const shadow = honoredOneActive
+        ? "0 0 0 1.5px rgba(199,125,255,0.5),0 0 32px rgba(155,89,182,0.22)"
+        : rankIdx === 5 ? "0 0 0 1px rgba(255,107,107,0.35),0 0 20px rgba(255,107,107,0.14)"
+        : rankIdx === 4 ? "0 0 0 1px rgba(255,217,61,0.2),0 0 12px rgba(255,217,61,0.08)"
+        : "";
+    if (shadow !== lastBarShadow) {
+        bar.style.transition = "box-shadow 0.5s ease";
+        bar.style.boxShadow = shadow;
+        lastBarShadow = shadow;
+    }
 }
 
 // ── Session summary ───────────────────────────────────────────────────────────
@@ -489,6 +494,10 @@ function resetSessionStats() {
     peakRankIdx = 0; peakWpm = 0; highCombo = 0;
     rankSamples = []; summaryTriggered = false; prevRankIdx = 0;
     cleanSendStreak = 0; hudShown = false;
+    hc_dataRank = ""; hc_visible = false; hc_rankText = ""; hc_rankColor = "";
+    hc_fillPct = -1; hc_fillBg = ""; hc_fillShadow = "";
+    hc_combo = ""; hc_comboColor = ""; hc_wpm = ""; hc_wpmShow = true;
+    hc_pk = ""; hc_pkColor = ""; hc_pkShow = true; hc_multi = ""; hc_multiShow = true;
 }
 
 function dismissSummary() {
@@ -548,6 +557,13 @@ function positionHud() {
     hud.style.right  = `${window.innerWidth - rect.right + 8}px`;
 }
 
+// HUD write cache — only touch DOM when values actually change
+let hc_dataRank = ""; let hc_visible = false; let hc_rankText = ""; let hc_rankColor = "";
+let hc_fillPct = -1; let hc_fillBg = ""; let hc_fillShadow = "";
+let hc_combo = ""; let hc_comboColor = ""; let hc_wpm = ""; let hc_wpmShow = true;
+let hc_pk = ""; let hc_pkColor = ""; let hc_pkShow = true;
+let hc_multi = ""; let hc_multiShow = true;
+
 function updateHud() {
     if (!hud) return;
 
@@ -562,7 +578,6 @@ function updateHud() {
         if (rankIdx > prevRankIdx && rankIdx >= 2) {
             showPopup(RANKS[rankIdx].label, RANKS[rankIdx].color);
             boostMultiplier(0.3, "rank up");
-            // Rank letter punch animation
             if (hudRankEl) {
                 hudRankEl.animate(
                     [
@@ -578,56 +593,69 @@ function updateHud() {
     }
     updateBarGlow(rankIdx);
 
-    // Activate at 300 WPM, but stay active down to 200 (hysteresis)
     if (wpm >= 300 && !honoredOneActive) activateHonoredOne();
     else if (honoredOneActive && wpm < 200) deactivateHonoredOne();
 
-    hud.dataset.rank = honoredOneActive ? "honored" : rank.id;
+    // --- Dirty-checked DOM writes (skip if unchanged) ---
+    const dr = honoredOneActive ? "honored" : rank.id;
+    if (dr !== hc_dataRank) { hud.dataset.rank = dr; hc_dataRank = dr; }
 
-    // HUD entrance animation on first show of session
     const shouldShow = styleScore > 0 || honoredOneActive;
     if (shouldShow && !hudShown) {
         hudShown = true;
         hud.classList.add("tp-visible", "tp-hud-enter");
         setTimeout(() => hud?.classList.remove("tp-hud-enter"), 500);
-    } else {
+        hc_visible = true;
+    } else if (shouldShow !== hc_visible) {
         hud.classList.toggle("tp-visible", shouldShow);
+        hc_visible = shouldShow;
     }
 
     if (hudRankEl) {
-        hudRankEl.textContent = honoredOneActive ? "✦" : rank.label;
-        hudRankEl.style.color = honoredOneActive ? "#e8d5ff" : rank.color;
+        const rt = honoredOneActive ? "✦" : rank.label;
+        const rc = honoredOneActive ? "#e8d5ff" : rank.color;
+        if (rt !== hc_rankText) { hudRankEl.textContent = rt; hc_rankText = rt; }
+        if (rc !== hc_rankColor) { hudRankEl.style.color = rc; hc_rankColor = rc; }
     }
 
     if (hudFillEl) {
         const lo  = rank.min;
         const hi  = rankIdx < RANKS.length - 1 ? RANKS[rankIdx + 1].min : 100;
-        const pct = hi > lo ? Math.max(0, Math.min(100, (styleScore - lo) / (hi - lo) * 100)) : 100;
-        hudFillEl.style.width      = `${pct}%`;
-        hudFillEl.style.background = honoredOneActive ? "#c77dff" : rank.color;
-        // Glow when near rank-up (90%+) or at S/DEVIL
-        hudFillEl.style.boxShadow  = pct >= 90 || rankIdx >= 4 ? `0 0 6px ${rank.color}` : "none";
+        const pct = hi > lo ? Math.round(Math.max(0, Math.min(100, (styleScore - lo) / (hi - lo) * 100))) : 100;
+        const bg  = honoredOneActive ? "#c77dff" : rank.color;
+        const sh  = pct >= 90 || rankIdx >= 4 ? `0 0 6px ${rank.color}` : "none";
+        if (pct !== hc_fillPct) { hudFillEl.style.width = `${pct}%`; hc_fillPct = pct; }
+        if (bg !== hc_fillBg) { hudFillEl.style.background = bg; hc_fillBg = bg; }
+        if (sh !== hc_fillShadow) { hudFillEl.style.boxShadow = sh; hc_fillShadow = sh; }
     }
 
-    if (hudComboEl) { hudComboEl.textContent = String(combo); hudComboEl.style.color = rank.color; }
+    if (hudComboEl) {
+        const ct = String(combo);
+        if (ct !== hc_combo) { hudComboEl.textContent = ct; hc_combo = ct; }
+        if (rank.color !== hc_comboColor) { hudComboEl.style.color = rank.color; hc_comboColor = rank.color; }
+    }
 
     if (hudWpmEl && hudWpmSep) {
         const show = wpm > 0;
-        hudWpmEl.textContent                         = show ? `${wpm} wpm` : "";
-        hudWpmEl.style.display = hudWpmSep.style.display = show ? "" : "none";
+        const wt = show ? `${wpm} wpm` : "";
+        if (wt !== hc_wpm) { hudWpmEl.textContent = wt; hc_wpm = wt; }
+        if (show !== hc_wpmShow) { hudWpmEl.style.display = hudWpmSep.style.display = show ? "" : "none"; hc_wpmShow = show; }
     }
 
     if (hudPkEl && hudPkSep) {
         const show = peakRankIdx > rankIdx && peakRankIdx > 1 && !honoredOneActive;
-        hudPkEl.textContent              = show ? `pk:${RANKS[peakRankIdx].label}` : "";
-        hudPkEl.style.color              = show ? RANKS[peakRankIdx].color : "";
-        hudPkEl.style.display = hudPkSep.style.display = show ? "" : "none";
+        const pt = show ? `pk:${RANKS[peakRankIdx].label}` : "";
+        const pc = show ? RANKS[peakRankIdx].color : "";
+        if (pt !== hc_pk) { hudPkEl.textContent = pt; hc_pk = pt; }
+        if (pc !== hc_pkColor) { hudPkEl.style.color = pc; hc_pkColor = pc; }
+        if (show !== hc_pkShow) { hudPkEl.style.display = hudPkSep.style.display = show ? "" : "none"; hc_pkShow = show; }
     }
 
     if (hudMultiEl && hudMultiSep) {
         const show = multiplier > 1.05;
-        hudMultiEl.textContent = show ? `${multiplier.toFixed(1)}×` : "";
-        hudMultiEl.style.display = hudMultiSep.style.display = show ? "" : "none";
+        const mt = show ? `${multiplier.toFixed(1)}×` : "";
+        if (mt !== hc_multi) { hudMultiEl.textContent = mt; hc_multi = mt; }
+        if (show !== hc_multiShow) { hudMultiEl.style.display = hudMultiSep.style.display = show ? "" : "none"; hc_multiShow = show; }
     }
 }
 
@@ -986,7 +1014,6 @@ function breakCombo() {
     // Called only on timeout — not on backspace
     if (combo > 0) hurtStyle(20);
     combo = 0;
-    updateHud();
 }
 
 function incrementCombo() {
@@ -1012,7 +1039,6 @@ function softDamage() {
     if (combo > 0) combo = Math.max(0, combo - 3);
     if (comboTimer) clearTimeout(comboTimer);
     if (combo > 0) comboTimer = setTimeout(breakCombo, settings.store.comboTimeoutMs * 1000);
-    updateHud();
 }
 
 function onMessageSent() {
@@ -1028,7 +1054,6 @@ function onMessageSent() {
 
     usedBackspace = false;
     combo = 0; // WPM decays naturally via the 4s window — don't hard-reset
-    updateHud();
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
@@ -1070,7 +1095,6 @@ function onKeyDown(e: KeyboardEvent) {
     }
     spawnConfetti(cx, cy);
     triggerShake();
-    updateHud();
 }
 
 function onKeyDownCapture(e: KeyboardEvent) {
@@ -1137,7 +1161,7 @@ export default definePlugin({
         combo = 0; styleScore = 0; usedBackspace = false; cleanSendStreak = 0;
         keystrokeIntervals = []; wpmTimestamps = []; wpm = 0;
         lastRhythmTime = 0; flowStateCooldown = 0; lastShakeTime = 0;
-        multiplier = 1.0; lastBurstCheck = 0; speedDemonStart = 0; lastSpeedDemonTrigger = 0;
+        multiplier = 1.0; lastBurstCheck = 0; speedDemonStart = 0; lastSpeedDemonTrigger = 0; lastBarShadow = ""; drainTick = 0;
         challengeCooldown = 0;
         prevRankIdx = 0; hudShown = false;
         resetSessionStats();
