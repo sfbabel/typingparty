@@ -287,10 +287,10 @@ function startDrainLoop() {
 
 // ── Popup ─────────────────────────────────────────────────────────────────────
 
+const activePopups: HTMLDivElement[] = [];
 function showPopup(text: string, color: string) {
-    // Cap at 4 concurrent popups to prevent DOM pile-up
-    const existing = document.querySelectorAll(".tp-popup");
-    if (existing.length >= 4) existing[0].remove();
+    // Cap at 4 concurrent — evict oldest without querySelectorAll scan
+    if (activePopups.length >= 4) { activePopups.shift()?.remove(); }
     const bar = getBarEl();
     if (!bar) return;
     const rect = bar.getBoundingClientRect();
@@ -299,7 +299,8 @@ function showPopup(text: string, color: string) {
     el.style.cssText = `right:${window.innerWidth - rect.right + 8}px;bottom:${window.innerHeight - rect.top + 52}px;color:${color};text-shadow:0 0 12px ${color}80;`;
     el.textContent = text;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1200);
+    activePopups.push(el);
+    setTimeout(() => { el.remove(); const idx = activePopups.indexOf(el); if (idx >= 0) activePopups.splice(idx, 1); }, 1200);
 }
 
 // ── Multiplier ────────────────────────────────────────────────────────────────
@@ -1161,7 +1162,7 @@ export default definePlugin({
         document.getElementById("tp-summary")?.remove();
         document.getElementById("tp-honored-banner")?.remove();
         document.getElementById("tp-stagelight")?.remove();
-        document.querySelectorAll(".tp-popup").forEach(el => el.remove());
+        activePopups.forEach(el => el.remove()); activePopups.length = 0;
         destroyHud();
         document.getElementById("tp-styles")?.remove();
         document.getElementById("tp-font")?.remove();
