@@ -350,12 +350,12 @@ function triggerChallenge() {
     if (now - challengeCooldown < 30000) return;
     challengeCooldown = now;
 
+    const bar = getBarEl();
+    if (!bar) return;
+
     challengePhrase = CHALLENGE_PHRASES[Math.floor(Math.random() * CHALLENGE_PHRASES.length)];
     challengeProgress = 0;
     challengeActive = true;
-
-    const bar = getBarEl();
-    if (!bar) return;
     const rect = bar.getBoundingClientRect();
 
     challengeEl = document.createElement("div");
@@ -377,8 +377,10 @@ function checkChallenge(key: string) {
     if (!challengeActive || !challengeEl) return;
 
     const expected = challengePhrase[challengeProgress];
-    if (key === expected) {
+    if (key.toLowerCase() === expected) {
         challengeProgress++;
+        // Small style reward per correct char — makes it feel responsive
+        styleScore = Math.min(100, styleScore + 1.5 * multiplier);
 
         const done = challengeEl.querySelector(".tp-chal-done") as HTMLElement;
         const cursor = challengeEl.querySelector(".tp-chal-cursor") as HTMLElement;
@@ -393,7 +395,8 @@ function checkChallenge(key: string) {
 
         if (cursor) cursor.textContent = challengePhrase[challengeProgress];
         if (remaining) remaining.textContent = challengePhrase.slice(challengeProgress + 1);
-    } else {
+    } else if (key !== " ") {
+        // Non-space wrong key = fail. Stray spaces are silently ignored (Discord quirk).
         dismissChallenge();
     }
 }
@@ -404,7 +407,7 @@ function completeChallenge() {
     if (challengeTimeout) { clearTimeout(challengeTimeout); challengeTimeout = null; }
 
     const bonus = 12 + challengePhrase.length;
-    styleScore = Math.min(100, styleScore + bonus);
+    styleScore = Math.min(100, styleScore + bonus * multiplier);
     boostMultiplier(0.8, "challenge");
 
     if (challengeEl) {
@@ -602,7 +605,8 @@ function updateHud() {
         const pct = hi > lo ? Math.max(0, Math.min(100, (styleScore - lo) / (hi - lo) * 100)) : 100;
         hudFillEl.style.width      = `${pct}%`;
         hudFillEl.style.background = honoredOneActive ? "#c77dff" : rank.color;
-        hudFillEl.style.boxShadow  = rankIdx >= 4 ? `0 0 6px ${rank.color}` : "none";
+        // Glow when near rank-up (90%+) or at S/DEVIL
+        hudFillEl.style.boxShadow  = pct >= 90 || rankIdx >= 4 ? `0 0 6px ${rank.color}` : "none";
     }
 
     if (hudComboEl) { hudComboEl.textContent = String(combo); hudComboEl.style.color = rank.color; }
@@ -990,11 +994,12 @@ function incrementCombo() {
     if (comboTimer) clearTimeout(comboTimer);
     comboTimer = setTimeout(breakCombo, settings.store.comboTimeoutMs * 1000);
 
-    // Milestone rewards — style bonus + popup
+    // Milestone rewards — style bonus + multiplier bump (like landing a trick)
     for (const [threshold, bonus] of COMBO_MILESTONES) {
         if (combo === threshold) {
-            styleScore = Math.min(100, styleScore + bonus);
-            showPopup(`${combo}×`, RANKS[getRankIndex(styleScore)].color);
+            styleScore = Math.min(100, styleScore + bonus * multiplier);
+            const boost = threshold >= 50 ? 0.4 : 0.2;
+            boostMultiplier(boost, `${combo}×`);
             break;
         }
     }
@@ -1300,14 +1305,16 @@ const CSS_TEXT = `
 .tp-chal-cursor { color: #fff; text-decoration: underline; }
 .tp-chal-remaining { color: rgba(255,255,255,0.2); }
 .tp-chal-timer {
-    margin-top: 6px; height: 2px; border-radius: 1px;
+    margin-top: 6px; width: 100%; height: 2px; border-radius: 1px;
     background: rgba(255,217,61,0.5);
+    transform-origin: left center;
+    will-change: transform;
     animation: tp-chal-countdown 10s linear forwards;
 }
 @keyframes tp-chal-countdown {
-    0%   { width: 100%; }
+    0%   { transform: scaleX(1); }
     80%  { background: rgba(255,217,61,0.5); }
-    100% { width: 0%; background: rgba(255,107,107,0.5); }
+    100% { transform: scaleX(0); background: rgba(255,107,107,0.5); }
 }
 .tp-chal-complete {
     border-color: rgba(64,192,87,0.3) !important;
