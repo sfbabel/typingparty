@@ -72,7 +72,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
 export default definePlugin({
     name: "babeltype",
     description: "DMC-inspired style meter — rewards speed and rhythm with confetti, screenshake, and rank-up drama. github.com/sfbabel/babeltype",
-    authors: [{ name: "sfbabel", id: 0n }],
+    authors: [{ name: "babel", id: 708497088777945158n }],
     settings,
     managedStyle,
 
