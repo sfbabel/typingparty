@@ -1,0 +1,376 @@
+#bt-hud {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Space Grotesk', 'gg sans', sans-serif;
+    pointer-events: none;
+    z-index: 9998;
+    padding: 8px 14px 8px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    opacity: 0;
+    transform-origin: bottom right;
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s cubic-bezier(0.34, 1.3, 0.64, 1),
+        background 0.4s ease,
+        border-color 0.4s ease,
+        box-shadow 0.4s ease;
+}
+#bt-hud.bt-visible { opacity: 1; }
+/* Entrance animation — slide up from bottom-right */
+#bt-hud.bt-hud-enter {
+    animation: bt-hud-slide-in 0.5s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+}
+@keyframes bt-hud-slide-in {
+    0%   { opacity: 0; transform: translateY(16px) scale(0.8); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+#bt-hud[data-rank="d"],
+#bt-hud[data-rank="c"] { transform: scale(0.82); }
+
+#bt-hud[data-rank="b"],
+#bt-hud[data-rank="a"] { transform: scale(1.0); }
+
+#bt-hud[data-rank="s"] {
+    transform: scale(1.1);
+    background: rgba(0,0,0,0.5);
+    border-color: rgba(255,255,255,0.05);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    backdrop-filter: blur(12px);
+}
+
+#bt-hud[data-rank="devil"] {
+    transform: scale(1.2);
+    background: rgba(0,0,0,0.62);
+    border-color: rgba(255,107,107,0.12);
+    box-shadow: 0 0 24px rgba(255,107,107,0.18), 0 4px 22px rgba(0,0,0,0.55);
+    backdrop-filter: blur(16px);
+}
+
+#bt-rank-letter {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    min-width: 46px;
+    text-align: center;
+    text-transform: uppercase;
+    transition: color 0.25s ease, text-shadow 0.3s ease;
+}
+#bt-hud[data-rank="s"]     #bt-rank-letter { text-shadow: 0 0 10px currentColor; }
+#bt-hud[data-rank="devil"] #bt-rank-letter {
+    text-shadow: 0 0 14px currentColor, 0 0 30px currentColor;
+    animation: bt-devil-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes bt-devil-pulse {
+    from { filter: brightness(1); }
+    to   { filter: brightness(1.6); }
+}
+
+#bt-hud-right { display: flex; flex-direction: column; gap: 4px; }
+
+#bt-meter-track {
+    width: 72px; height: 3px; border-radius: 2px; overflow: hidden;
+    background: rgba(255,255,255,0.07);
+}
+#bt-meter-fill {
+    height: 100%; border-radius: 2px;
+    transition: width 0.12s ease-out, background 0.25s ease, box-shadow 0.25s ease;
+}
+#bt-hud-stats {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px; font-weight: 400; letter-spacing: 0.5px;
+    text-transform: lowercase; display: flex; align-items: center;
+    gap: 3px; color: rgba(255,255,255,0.35); line-height: 1;
+}
+#bt-combo-count { font-weight: 600; transition: color 0.2s ease; }
+.bt-x   { opacity: 0.3; font-weight: 300; }
+.bt-sep { opacity: 0.25; }
+#bt-wpm-val  { color: rgba(255,255,255,0.28); }
+#bt-peak-val { font-weight: 600; }
+#bt-multi-val { color: #ffd93d; font-weight: 600; }
+
+.bt-popup {
+    position: fixed;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px; font-weight: 500; letter-spacing: 2px;
+    text-transform: lowercase; pointer-events: none; z-index: 9999;
+    animation: bt-float-up 1.2s ease-out forwards;
+}
+@keyframes bt-float-up {
+    0%   { opacity: 0; transform: translateY(4px); }
+    18%  { opacity: 1; transform: translateY(-8px); }
+    100% { opacity: 0; transform: translateY(-52px); }
+}
+
+#bt-summary {
+    position: fixed; font-family: 'Space Grotesk', sans-serif;
+    text-align: center; pointer-events: none; z-index: 9998;
+    background: rgba(18,19,22,0.96); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 14px 22px 12px; backdrop-filter: blur(18px);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.55); min-width: 130px;
+    animation: bt-summary-in 0.4s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+}
+.bt-sum-label { font-size: 9px; font-weight: 400; letter-spacing: 3px; color: #2e3035; margin-bottom: 4px; text-transform: lowercase; }
+.bt-sum-rank  { font-size: 46px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
+.bt-sum-stats { display: flex; justify-content: center; gap: 16px; }
+.bt-sum-stats span { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.bt-sum-stats b    { font-size: 17px; font-weight: 600; color: #dcddde; line-height: 1; }
+.bt-sum-stats small{ font-size: 8px; font-weight: 400; letter-spacing: 2px; color: #2e3035; text-transform: lowercase; }
+@keyframes bt-summary-in {
+    0%   { opacity: 0; transform: translateY(8px) scale(0.93); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bt-fade-out {
+    0%   { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(6px); }
+}
+
+/* ── Typing challenge ──────────────────────────────────────────────────────── */
+#bt-challenge {
+    position: fixed;
+    font-family: 'Space Grotesk', sans-serif;
+    pointer-events: none; z-index: 9999;
+    background: rgba(18,19,22,0.95);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; padding: 10px 16px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    animation: bt-summary-in 0.3s ease-out forwards;
+}
+.bt-chal-label {
+    font-size: 8px; font-weight: 400; letter-spacing: 3px;
+    color: rgba(255,255,255,0.25); text-transform: lowercase;
+    margin-bottom: 6px;
+}
+.bt-chal-phrase {
+    font-size: 16px; font-weight: 500; letter-spacing: 1px;
+    line-height: 1.4; white-space: nowrap;
+}
+/* Quote mode — wider box, word wrap, smaller text */
+.bt-chal-quote { max-width: 420px; }
+.bt-chal-quote .bt-chal-phrase {
+    font-size: 13px; letter-spacing: 0.3px;
+    white-space: normal; word-break: break-word;
+    line-height: 1.6;
+}
+.bt-chal-progress {
+    font-size: 8px; font-weight: 400; letter-spacing: 2px;
+    color: rgba(255,255,255,0.2); text-align: right;
+    margin-top: 4px;
+}
+.bt-chal-done { color: #40c057; }
+.bt-chal-cursor { color: #fff; text-decoration: underline; }
+.bt-chal-remaining { color: rgba(255,255,255,0.2); }
+.bt-chal-timer {
+    margin-top: 6px; width: 100%; height: 2px; border-radius: 1px;
+    background: rgba(255,217,61,0.5);
+    transform-origin: left center;
+    will-change: transform;
+    animation: bt-chal-countdown var(--bt-chal-dur, 10s) linear forwards;
+}
+@keyframes bt-chal-countdown {
+    0%   { transform: scaleX(1); }
+    80%  { background: rgba(255,217,61,0.5); }
+    100% { transform: scaleX(0); background: rgba(255,107,107,0.5); }
+}
+.bt-chal-complete {
+    border-color: rgba(64,192,87,0.3) !important;
+    animation: bt-chal-success 0.8s ease-out forwards !important;
+}
+@keyframes bt-chal-success {
+    0%   { opacity: 1; transform: scale(1); }
+    25%  { opacity: 1; transform: scale(1.06); border-color: rgba(64,192,87,0.5); }
+    100% { opacity: 0; transform: scale(0.95) translateY(-10px); }
+}
+
+/* ── Honored One ─────────────────────────────────────────────────────────────── */
+#bt-honored-banner {
+    position: fixed; top: 50%; left: 50%;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    font-family: 'Space Grotesk', sans-serif; pointer-events: none; z-index: 99998;
+    animation: bt-honored-banner-anim 3s ease-out forwards;
+}
+.bt-honored-title {
+    font-size: 60px; font-weight: 700; letter-spacing: 10px;
+    color: #e8d5ff; text-transform: lowercase;
+    text-shadow: 0 0 32px #c77dff, 0 0 64px #9b59b6;
+}
+.bt-honored-sub {
+    font-size: 13px; font-weight: 300; letter-spacing: 8px;
+    color: rgba(200,180,255,0.5); text-transform: lowercase;
+}
+@keyframes bt-honored-banner-anim {
+    0%   { opacity: 0; transform: translate(-50%, -44%) scale(0.88); }
+    12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+    72%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -56%) scale(0.96); }
+}
+#bt-hud[data-rank="honored"] {
+    transform: scale(1.5);
+    background: rgba(28, 8, 50, 0.9);
+    border-color: rgba(200, 150, 255, 0.18);
+    box-shadow: 0 0 40px rgba(155,89,182,0.35), 0 4px 24px rgba(0,0,0,0.65);
+    backdrop-filter: blur(16px);
+}
+#bt-hud[data-rank="honored"] #bt-rank-letter {
+    animation: bt-honored-pulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes bt-honored-pulse {
+    from { filter: brightness(1.0); text-shadow: 0 0 16px #e8d5ff, 0 0 32px #9b59b6; }
+    to   { filter: brightness(1.9); text-shadow: 0 0 28px #fff,    0 0 56px #c77dff; }
+}
+
+/* ── Red & Blue orbs (1:06) — converge toward center ─────────────────────── */
+#bt-orb-red, #bt-orb-blue {
+    position: fixed; top: 50%; width: 120px; height: 120px;
+    border-radius: 50%; pointer-events: none; z-index: 999997;
+    filter: blur(30px);
+    will-change: translate, scale, opacity;
+    animation: bt-orb-converge 9s ease-in forwards;
+}
+#bt-orb-red {
+    left: 5%; transform: translateY(-50%);
+    background: radial-gradient(circle, #ff4444 0%, #cc0000 50%, transparent 100%);
+    box-shadow: 0 0 60px #ff4444, 0 0 120px #cc000080;
+    --bt-target-x: calc(50vw - 60px - 5vw);
+}
+#bt-orb-blue {
+    right: 5%; left: auto; transform: translateY(-50%);
+    background: radial-gradient(circle, #4488ff 0%, #0044cc 50%, transparent 100%);
+    box-shadow: 0 0 60px #4488ff, 0 0 120px #0044cc80;
+    --bt-target-x: calc(-50vw + 60px + 5vw);
+}
+@keyframes bt-orb-converge {
+    0%   { opacity: 0; translate: 0 0; scale: 0.5; }
+    15%  { opacity: 1; scale: 1; }
+    85%  { opacity: 1; scale: 1.3; }
+    100% { opacity: 0; translate: var(--bt-target-x) 0; scale: 0.6; }
+}
+
+/* ── Murasaki (1:15.9) — persistent full-screen purple ───────────────────── */
+#bt-murasaki {
+    position: fixed; inset: 0; z-index: 999998; pointer-events: none;
+    background: radial-gradient(ellipse at center, #c864ff 0%, #9b30ff 25%, #7b1fa2 45%, #4a007a 65%, #1a0033 100%);
+    opacity: 0;
+}
+.bt-murasaki-breathe {
+    animation: bt-murasaki-breathe 3.5s ease-in-out infinite alternate !important;
+}
+@keyframes bt-murasaki-breathe {
+    from { opacity: 0.35; }
+    to   { opacity: 0.52; }
+}
+
+/* White flash on Murasaki impact — solid color, no gradient compositing */
+#bt-murasaki-flash {
+    position: fixed; inset: 0; z-index: 999999; pointer-events: none;
+    background: #fff;
+    will-change: opacity;
+    animation: bt-murasaki-flash-anim 0.7s ease-out forwards;
+}
+@keyframes bt-murasaki-flash-anim {
+    0%   { opacity: 0; }
+    5%   { opacity: 1; }
+    15%  { opacity: 0.6; }
+    100% { opacity: 0; }
+}
+
+/* Expanding shockwave ring — border + opacity only, NO box-shadow (kills perf at scale) */
+#bt-murasaki-ring {
+    position: fixed; top: 50%; left: 50%;
+    width: 40px; height: 40px; margin: -20px 0 0 -20px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(200,100,255,0.85);
+    pointer-events: none; z-index: 999999;
+    will-change: transform, opacity;
+    animation: bt-ring-expand 1.2s ease-out forwards;
+}
+@keyframes bt-ring-expand {
+    0%   { transform: scale(0.3); opacity: 1; }
+    25%  { opacity: 0.7; }
+    100% { transform: scale(30); opacity: 0; }
+}
+
+/* Technique kanji — 虚式「茈」 — NO filter:blur (forces re-rasterization per frame) */
+#bt-murasaki-kanji {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px; font-weight: 700;
+    color: #f0e0ff;
+    text-shadow: 0 0 30px #c77dff, 0 0 60px #9b59b6, 0 0 100px #7b1fa2;
+    pointer-events: none; z-index: 999999;
+    letter-spacing: 14px;
+    will-change: transform, opacity;
+    animation: bt-kanji-anim 3.2s ease-out forwards;
+}
+@keyframes bt-kanji-anim {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+    10%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+    50%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.12); }
+}
+
+/* ── Crash screen (1:43) ─────────────────────────────────────────────────────── */
+#bt-crash {
+    position: fixed; inset: 0; z-index: 999999; pointer-events: none;
+    background: #0d0d0d;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    font-family: 'Space Grotesk', monospace; opacity: 0;
+}
+#bt-crash::before {
+    content: ":(";
+    font-size: 120px; font-weight: 700; color: #fff; line-height: 1;
+}
+#bt-crash::after {
+    content: "Your Discord ran into a problem.\\Astop code:  HONORED_ONE_ACHIEVED";
+    white-space: pre;
+    font-size: 15px; font-weight: 400; color: rgba(255,255,255,0.7);
+    text-align: center; line-height: 2; letter-spacing: 1px;
+}
+
+/* ── Stagelight (Honored One) — golden Gojo awakening ────────────────────── */
+#bt-stagelight {
+    position: fixed; inset: 0; z-index: 9997; pointer-events: none;
+    background:
+        radial-gradient(ellipse 32% 100% at 50% 0%,
+            rgba(255,215,80,0.28) 0%,
+            rgba(255,180,40,0.14) 30%,
+            rgba(255,150,20,0.05) 55%,
+            transparent 75%),
+        radial-gradient(ellipse 18% 80% at 50% 0%,
+            rgba(255,240,180,0.18) 0%,
+            transparent 60%),
+        linear-gradient(180deg,
+            rgba(255,220,100,0.08) 0%,
+            transparent 50%);
+    opacity: 0;
+    animation: bt-stagelight-in 2.5s ease-in forwards;
+}
+@keyframes bt-stagelight-in {
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+}
+#bt-stagelight::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 50%; width: 4px; height: 100vh;
+    transform: translateX(-50%) scaleY(0);
+    transform-origin: top center;
+    background: linear-gradient(180deg, rgba(255,230,140,0.7), rgba(255,200,60,0.15), transparent);
+    will-change: transform, opacity;
+    animation: bt-stagelight-beam 2s ease-out 0.5s forwards;
+}
+@keyframes bt-stagelight-beam {
+    0%   { transform: translateX(-50%) scaleY(0); opacity: 0; }
+    100% { transform: translateX(-50%) scaleY(1); opacity: 1; }
+}
+
+#bt-particles {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 99999; overflow: hidden;
+}

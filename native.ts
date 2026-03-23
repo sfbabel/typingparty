@@ -8,7 +8,7 @@ import { app } from "electron";
 
 // Intercept our audio iframe and force playback from the main process,
 // bypassing Chromium's autoplay policy entirely.
-// We identify our iframe via the `typingparty=1` query param the renderer appends.
+// We identify our iframe via the `babeltype=1` query param the renderer appends.
 // Uses MutationObserver for reliable detection + polling fallback.
 
 app.on("browser-window-created", (_, win) => {
@@ -16,7 +16,7 @@ app.on("browser-window-created", (_, win) => {
         if (!frame) return;
         frame.once("dom-ready", () => {
             try {
-                if (!frame.url.includes("typingparty=1")) return;
+                if (!frame.url.includes("babeltype=1")) return;
 
                 // MutationObserver catches the <audio>/<video> the instant SoundCloud
                 // (or any widget) creates it — no more missed polls.

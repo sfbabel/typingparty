@@ -1,74 +1,50 @@
-# TypingParty
+# babeltype
 
-A [Vencord](https://vencord.dev/) plugin that turns Discord typing into a skating-game-style meter — rewarding speed, rhythm, and tricks with confetti, combos, multipliers, and a secret ultimate rank.
+DMC-inspired style meter for Discord — rewards speed and rhythm with confetti, screenshake, and rank-up drama.
 
 ## Features
 
-- **Style meter** — gain style points through typing speed and rhythm. Points drain over time; higher ranks drain faster.
-- **Combo system** — every keystroke builds your combo. Milestones at 5x/10x/20x/35x/50x/75x/100x give bonus style + popups.
-- **Multiplier** — tricks and challenges boost your multiplier (up to 5.0x). All style gains are multiplied. Decays over time.
-- **Trick detection** — automatic tricks reward your typing patterns:
-  - **Burst** — 6+ rapid-fire keys (< 90ms avg interval). +0.4x multiplier.
-  - **Flow** — sustained rhythm consistency for 6+ strokes. +0.3x multiplier.
-  - **Speed Demon** — 180+ WPM sustained for 3+ seconds. +0.6x multiplier.
-  - **Rank Up** — climbing to B or higher. +0.3x multiplier.
-- **Typing challenges** — MonkeyType-style phrases pop up at B rank and above. Type them character-perfect for massive style + 0.8x multiplier. Wrong key = soft fail. No penalty.
-- **Rolling WPM** — 4-second sliding window, recalculated 10x/sec. Doesn't hard-reset on send.
-- **Confetti** — particles burst from your caret. GPU-composited via a single shared `requestAnimationFrame` loop.
-- **Screen shake** — chat area shakes at B rank and above. Intensity scales with rank.
-- **Send celebration** — clean sends (no backspaces) trigger confetti bursts and streak popups.
-- **Backspace forgiveness** — small penalty instead of full combo break.
-- **Session summary** — shows modal rank, peak rank, high combo, and peak WPM after you stop.
-- **Bar glow** — message bar glows at S rank and above.
-
-## Ranks
-
-| Rank  | Style Score | Vibe |
-|-------|------------|------|
-| D     | 0          | Just warming up |
-| C     | 18         | Getting there |
-| B     | 38         | Respectable — challenges start appearing |
-| A     | 58         | Serious |
-| S     | 78         | Elite |
-| DEVIL | 92         | Brutal drain — you glimpse it, you don't live in it |
-
-There's a secret rank beyond DEVIL. You'll know when you find it.
-
-## Installation
-
-### Vesktop (recommended)
-
-1. Clone [Vencord](https://github.com/Vendicated/Vencord)
-2. Copy `index.tsx` and `native.ts` into `src/plugins/typingparty/`
-3. Run `pnpm build`
-4. Copy the built files from `dist/` to `~/.config/vesktop/sessionData/vencordFiles/`
-5. Restart Vesktop
-
-### Files
-
-- `index.tsx` — main plugin (renderer process): HUD, style meter, tricks, challenges, and all effects
-- `native.ts` — Electron main process hook for audio autoplay bypass
+- **Style Meter** — D → C → B → A → S → DEVIL rank system. Score builds from speed, rhythm consistency, and combo streaks. Decays when idle.
+- **Combo Counter** — Every keystroke builds combo. Backspace softly punishes (-3 combo, -6 style). Inactivity resets it. Milestones at 5, 10, 20, 35, 50, 75, 100 give style bursts and multiplier boosts.
+- **WPM Tracker** — Rolling 4-second window, live in the HUD.
+- **Multiplier System** — Stacks from tricks and milestones (up to 5.0×), decays toward 1.0× over time.
+- **Trick Detection** — Burst (6+ keys avg <90ms), Speed Demon (180+ WPM sustained 3s), Flow State (high rhythm consistency).
+- **Challenges** — Typing prompts appear at B rank and above. Two modes:
+  - **Phrases** — Short JJK/DMC references. Wrong key = instant fail.
+  - **Quotes** — 1500 quotes from MonkeyType (short ≤100 chars, medium 100–300 chars). Wrong key = red flash + small penalty (forgiving). Timer scales with length. Bigger rewards for longer quotes.
+- **Confetti Particles** — Burst from the caret as you type. Density scales with rank. GPU-composited, shared animation loop, 50 particle cap.
+- **Screen Shake** — Chat area shakes at B rank and above. Intensity scales with rank.
+- **Session Summary** — When you stop, shows your modal rank, peak rank, high combo, and peak WPM.
+- **Clean Send Rewards** — Sending without backspace gives bonus style and confetti. Streaks at 3, 5, 10 consecutive clean sends.
+- **Bar Glow** — Message bar glows at S and DEVIL rank.
+- **Honored One** — Secret mode at 300+ WPM. Music, stagelight, timed JJK sequence with Red/Blue orbs, Hollow Purple flash, and fake crash screen.
 
 ## Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Enable Confetti | On | Spawn confetti particles while typing |
-| Enable Screen Shake | On | Shake the chat area based on rank |
-| Shake Intensity | 1 | Screen shake cap (1 = subtle, 8 = full) |
-| Confetti Density | 1 | Particles per keystroke |
-| Combo Timeout | 3s | Seconds of inactivity before combo resets |
-| Audio URL | SoundCloud link | Audio track for a certain something... |
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Challenge Mode | Phrases / Quotes Short / Quotes Medium / Quotes Mixed / Off | Phrases |
+| Enable Confetti | Toggle particle effects | On |
+| Enable Screen Shake | Toggle shake effect | On |
+| Shake Intensity | Max shake strength (1–8) | 1 |
+| Confetti Density | Particles per keystroke (1–5) | 1 |
+| Combo Timeout | Seconds before combo resets (1–8) | 3 |
+| Honored One Audio URL | SoundCloud/YouTube URL or direct audio file for the secret | SoundCloud link |
 
-## Performance
+## Ranks
 
-- Single shared `requestAnimationFrame` loop for all particles
-- `transform:translate()` / `transform:scale()` for GPU-composited animation (no layout reflow)
-- DOM elements cached at creation; Discord elements lazily cached with staleness checks
-- Confetti and shake auto-suppress above 400 WPM
-- Honored One effects use only opacity/transform animations (no `filter` animation, no `box-shadow` at scale)
-- Drain loop runs at 10Hz, not per-keystroke
+| Rank | Min Score | Color |
+|------|-----------|-------|
+| D | 0 | Grey |
+| C | 18 | Silver |
+| B | 38 | Blue |
+| A | 58 | Green |
+| S | 78 | Gold |
+| DEVIL | 92 | Red |
 
-## License
+## Installation
 
-GPL-3.0-or-later
+1. Clone/copy the `babeltype` folder into your Vencord `src/userplugins/` directory
+2. Run `pnpm build` (or `pnpm watch` for dev)
+3. Enable "babeltype" in Vencord plugin settings
+4. Start typing
