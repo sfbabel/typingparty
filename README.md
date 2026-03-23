@@ -17,7 +17,6 @@ DMC-inspired style meter for Discord — rewards speed and rhythm with confetti,
 - **Session Summary** — When you stop, shows your modal rank, peak rank, high combo, and peak WPM.
 - **Clean Send Rewards** — Sending without backspace gives bonus style and confetti. Streaks at 3, 5, 10 consecutive clean sends.
 - **Bar Glow** — Message bar glows at S and DEVIL rank.
-- **Honored One** — Secret mode at 300+ WPM. Music, stagelight, timed JJK sequence with Red/Blue orbs, Hollow Purple flash, and fake crash screen.
 
 ## Settings
 
@@ -29,7 +28,6 @@ DMC-inspired style meter for Discord — rewards speed and rhythm with confetti,
 | Shake Intensity | Max shake strength (1–8) | 1 |
 | Confetti Density | Particles per keystroke (1–5) | 1 |
 | Combo Timeout | Seconds before combo resets (1–8) | 3 |
-| Honored One Audio URL | SoundCloud/YouTube URL or direct audio file for the secret | SoundCloud link |
 
 ## Ranks
 
